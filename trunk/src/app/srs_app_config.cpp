@@ -6,6 +6,8 @@
 
 #include <srs_app_config.hpp>
 
+#include <iostream>
+
 #include <unistd.h>
 #include <stdio.h>
 #include <stdlib.h>
@@ -2246,6 +2248,10 @@ srs_error_t SrsConfig::global_to_json(SrsJsonObject* obj)
                             ssobj->set(ssdir->name, ssdir->dumps_arg0_to_boolean());
                         } else if (ssdir->name == "query_catalog_interval") {
                             ssobj->set(ssdir->name, ssdir->dumps_arg0_to_integer());
+                        } else if (ssdir->name == "register_authentication") {
+                            ssobj->set(ssdir->name, ssdir->dumps_arg0_to_boolean());
+                        } else if (ssdir->name == "register_password") {
+                            ssobj->set(ssdir->name, ssdir->dumps_arg0_to_str());
                         }
                     }
                 }//end if
@@ -3807,7 +3813,8 @@ srs_error_t SrsConfig::check_normal_config()
                     string m = conf->at(j)->name;
                     if (m != "enabled"  && m != "listen" && m != "ack_timeout" && m != "keepalive_timeout"
                         && m != "host" && m != "serial" && m != "realm" && m != "auto_play" && m != "invite_port_fixed"
-                        && m != "query_catalog_interval") {
+                        && m != "query_catalog_interval" && m != "register_authentication"
+                        && m != "register_password") {
                         return srs_error_new(ERROR_SYSTEM_CONFIG_INVALID, "illegal stream_caster.%s", m.c_str());
                     }
                 }
@@ -4905,6 +4912,48 @@ srs_utime_t SrsConfig::get_stream_caster_gb28181_sip_query_catalog_interval(SrsC
     }
 
     return (srs_utime_t)(::atoi(conf->arg0().c_str()) * SRS_UTIME_SECONDS);
+}
+
+bool SrsConfig::get_stream_caster_gb28181_sip_register_authentication(SrsConfDirective* conf)
+{
+    static bool DEFAULT = false;
+
+    if (!conf) {
+        return DEFAULT;
+    }
+
+    conf = conf->get("sip");
+    if (!conf) {
+        return DEFAULT;
+    }
+   
+    conf = conf->get("register_authentication");
+    if (!conf || conf->arg0().empty()) {
+        return DEFAULT;
+    }
+
+    return SRS_CONF_PERFER_FALSE(conf->arg0());
+}
+
+string SrsConfig::get_stream_caster_gb28181_sip_register_password(SrsConfDirective* conf)
+{
+    static string DEFAULT = "";
+
+    if (!conf) {
+        return DEFAULT;
+    }
+
+    conf = conf->get("sip");
+    if (!conf) {
+        return DEFAULT;
+    }
+
+    conf = conf->get("register_password");
+    if (!conf || conf->arg0().empty()) {
+        return DEFAULT;
+    }
+
+    return conf->arg0();
 }
 
 bool SrsConfig::get_rtc_server_enabled()

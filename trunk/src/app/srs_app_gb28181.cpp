@@ -10,6 +10,8 @@
 #include <stdio.h>
 #include <stdlib.h>
 
+#include <iostream>
+
 using namespace std;
 
 #include <srs_app_rtsp.hpp>
@@ -899,6 +901,8 @@ SrsGb28181Config::SrsGb28181Config(SrsConfDirective* c)
     sip_keepalive_timeout = _srs_config->get_stream_caster_gb28181_keepalive_timeout(c);
     sip_invite_port_fixed = _srs_config->get_stream_caster_gb28181_sip_invite_port_fixed(c);
     sip_query_catalog_interval = _srs_config->get_stream_caster_gb28181_sip_query_catalog_interval(c);
+    sip_register_authentication = _srs_config->get_stream_caster_gb28181_sip_register_authentication(c);
+    sip_register_password = _srs_config->get_stream_caster_gb28181_sip_register_password(c);
 }
 
 SrsGb28181Config::~SrsGb28181Config()

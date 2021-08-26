@@ -6,11 +6,14 @@
 
 #include <srs_app_gb28181_sip.hpp>
 
-#include <algorithm>
 #include <sys/socket.h>
 #include <netinet/in.h>
 #include <arpa/inet.h>
 #include <netdb.h>
+#include <md5.h>
+
+#include <iostream>
+#include <algorithm>
 
 using namespace std;
 
@@ -29,6 +32,21 @@ using namespace std;
 #include <srs_app_gb28181_stack.hpp>
 #include <srs_app_gb28181.hpp>
 
+std::string srs_sip_get_param_by_split(
+    const std::string &msg, const std::string &split) {
+    std::vector<std::string>  v_pram = srs_string_split(msg, split);
+    if (v_pram.size() > 1) {
+        return v_pram.at(1);
+    }
+    return "";
+}
+
+void srs_sip_remove_param_from_str(std::string *msg, const std::string &param) {
+    std::size_t first = msg->find_first_of(param);
+    msg->erase(first, 1);
+    std::size_t last = msg->find_last_of(param);
+    msg->erase(last, 1);
+}
 
 std::string srs_get_sip_session_status_str(SrsGb28181SipSessionStatusType status)
 {
@@ -467,9 +485,82 @@ srs_error_t SrsGb28181SipService::on_udp_packet(const sockaddr* from, const int 
     return err;
 }
 
+bool SrsGb28181SipService::register_authentication(
+    const std::string &authorization) {
+    /*
+    Authorization: Digest username="34020000001320000001", realm="3402000000", 
+    nonce="f1da98bd160f3e2efe954c6eedf5f75a", 
+    uri="sip:34020000002000000001@3402000000", 
+    response="b06fd2eb7d6f695100ec4fb5e715f04d", algorithm=MD5, cnonce="0a4f113b", 
+    qop=auth, nc=00000001
+    */
+
+    /*
+    HA1=MD5(username:realm:passwd)
+    #username和realm在字段“Authorization”中可以找到，passwd这个是由客户端和服务器协商得到的，一般情况下UAC端存一个UAS也知道的密码就行了
+    HA2=MD5(Method:Uri) #Method一般有INVITE, ACK, OPTIONS, BYE, CANCEL,
+    REGISTER；Uri可以在字段“Authorization”找到 response =
+    MD5(HA1:nonce:nc:cnonce:qop:HA2)
+    */
+    std::vector<std::string> authentications =
+        srs_string_split(authorization, ",");
+    std::string username = srs_sip_get_param_by_split(authentications[0], "=");
+    std::string realm = srs_sip_get_param_by_split(authentications[1], "=");
+    std::string nonce = srs_sip_get_param_by_split(authentications[2], "=");
+    std::string uri = srs_sip_get_param_by_split(authentications[3], "=");
+    std::string response = srs_sip_get_param_by_split(authentications[4], "=");
+    std::string algorithm = srs_sip_get_param_by_split(authentications[5], "=");
+    std::string cnonce = srs_sip_get_param_by_split(authentications[6], "=");
+    std::string qop = srs_sip_get_param_by_split(authentications[7], "=");
+    std::string nc = srs_sip_get_param_by_split(authentications[8], "=");
+
+    srs_sip_remove_param_from_str(&username, "\"");
+    srs_sip_remove_param_from_str(&realm, "\"");
+    srs_sip_remove_param_from_str(&nonce, "\"");
+    srs_sip_remove_param_from_str(&uri, "\"");
+    srs_sip_remove_param_from_str(&response, "\"");
+    srs_sip_remove_param_from_str(&cnonce, "\"");
+
+    std::cout << "username: " << username << std::endl;
+    std::cout << "realm: " << realm << std::endl;
+    std::cout << "nonce: " << nonce << std::endl;
+    std::cout << "uri: " << uri << std::endl;
+    std::cout << "response: " << response << std::endl;
+    std::cout << "algorithm: " << algorithm << std::endl;
+    std::cout << "cnonce: " << cnonce << std::endl;
+    std::cout << "qop: " << qop << std::endl;
+    std::cout << "nc: " << nc << std::endl;
+
+    std::string ha1Str =
+      username + ":" + realm + ":" + config->sip_register_password;
+    std::string ha2Str = "REGISTER:" + uri;
+
+    md5::MD5 md51;
+    char *ha1 = md51.digestString(const_cast<char *>(ha1Str.c_str()));
+    md5::MD5 md52;
+    char *ha2 = md52.digestString(const_cast<char *>(ha2Str.c_str()));
+
+    std::string responseStr =
+      std::string(ha1) + ":" + nonce + ":" + nc + ":"
+      + cnonce + ":" + qop + ":" + std::string(ha2);
+
+     md5::MD5 md53;
+     char *responseRes = md53.digestString(
+         const_cast<char *>(responseStr.data()));
+
+    std::cout << "responseStr = " << responseRes << std::endl;
+
+    if (std::string(responseRes) == response) {
+        return true;
+    } else {
+        return false;
+    }
+}
+
 srs_error_t SrsGb28181SipService::on_udp_sip(string peer_ip, int peer_port, 
         std::string recv_msg, sockaddr* from, const int fromlen)
 {
+    
     srs_error_t err = srs_success;
 
     int recv_len = recv_msg.size();
@@ -494,11 +585,14 @@ srs_error_t SrsGb28181SipService::on_udp_sip(string peer_ip, int peer_port,
 
     std::string session_id = req->sip_auth_id;
 
-    if (req->is_register()) {
-        std::vector<std::string> serial =  srs_string_split(srs_string_replace(req->uri,"sip:", ""), "@");
-        if (serial.empty()){
-            return srs_error_new(ERROR_GB28181_SIP_PRASE_FAILED, "register string split");
-        }
+    if (req->is_register_authentication()) {
+        send_status(req, from, fromlen);
+    } else if (req->is_register() && !req->is_register_authentication()) {
+        if (register_authentication(req->authorization)) {
+            std::vector<std::string> serial =  srs_string_split(srs_string_replace(req->uri,"sip:", ""), "@");
+            if (serial.empty()){
+                return srs_error_new(ERROR_GB28181_SIP_PRASE_FAILED, "register string split");
+            }
 
         //if (serial.at(0) != config->sip_serial){
         //    srs_warn("gb28181: client:%s request serial and server serial inconformity(%s:%s)",
@@ -506,28 +600,31 @@ srs_error_t SrsGb28181SipService::on_udp_sip(string peer_ip, int peer_port,
         //    return  err;
         //}
 
-        srs_trace("gb28181: request client id=%s peer(%s, %d)", req->sip_auth_id.c_str(), peer_ip.c_str(), peer_port);
-        srs_trace("gb28181: %s method=%s, uri=%s, version=%s expires=%d", 
-            req->get_cmdtype_str().c_str(), req->method.c_str(),
-            req->uri.c_str(), req->version.c_str(), req->expires);
+            srs_trace("gb28181: request client id=%s peer(%s, %d)", req->sip_auth_id.c_str(), peer_ip.c_str(), peer_port);
+            srs_trace("gb28181: %s method=%s, uri=%s, version=%s expires=%d", 
+                req->get_cmdtype_str().c_str(), req->method.c_str(),
+                req->uri.c_str(), req->version.c_str(), req->expires);
 
-        SrsGb28181SipSession* sip_session = NULL;
-        if ((err = fetch_or_create_sip_session(req, &sip_session)) != srs_success) {
-            srs_error_wrap(err, "create sip session error!");
-            return err;
+            SrsGb28181SipSession* sip_session = NULL;
+            if ((err = fetch_or_create_sip_session(req, &sip_session)) != srs_success) {
+                srs_error_wrap(err, "create sip session error!");
+                return err;
+            }
+            srs_assert(sip_session);
+            sip_session->set_request(req);
+
+            send_status(req, from, fromlen);
+            sip_session->set_register_status(SrsGb28181SipSessionRegisterOk);
+            sip_session->set_register_time(srs_get_system_time());
+            sip_session->set_reg_expires(req->expires);
+            sip_session->set_sockaddr((sockaddr)*from);
+            sip_session->set_sockaddr_len(fromlen);
+            sip_session->set_peer_ip(peer_ip);
+            sip_session->set_peer_port(peer_port);
+        } else {
+            std::cout << "gb28181: failed to register authentication." << std::endl;
+            srs_trace("gb28181: failed to register authentication.");
         }
-        srs_assert(sip_session);
-        sip_session->set_request(req);
-
-        send_status(req, from, fromlen);
-        sip_session->set_register_status(SrsGb28181SipSessionRegisterOk);
-        sip_session->set_register_time(srs_get_system_time());
-        sip_session->set_reg_expires(req->expires);
-        sip_session->set_sockaddr((sockaddr)*from);
-        sip_session->set_sockaddr_len(fromlen);
-        sip_session->set_peer_ip(peer_ip);
-        sip_session->set_peer_port(peer_port);
-       
     }else if (req->is_message()) {
         SrsGb28181SipSession* sip_session = fetch(session_id);
          

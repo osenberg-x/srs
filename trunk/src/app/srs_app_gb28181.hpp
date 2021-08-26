@@ -385,6 +385,8 @@ public:
     bool sip_auto_play;
     bool sip_invite_port_fixed;
     srs_utime_t sip_query_catalog_interval;
+    bool sip_register_authentication;
+    std::string sip_register_password;
  
 public:
     SrsGb28181Config(SrsConfDirective* c);

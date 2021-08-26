@@ -163,6 +163,7 @@ private:
     void destroy();
     srs_error_t on_udp_sip(std::string host, int port, std::string recv_msg, sockaddr* from, int fromlen);
 public:
+    bool register_authentication(const std::string &authorization);
     int send_message(sockaddr* f, int l, std::stringstream& ss);
    
     int send_ack(SrsSipRequest *req, sockaddr *f, int l);

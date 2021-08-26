@@ -91,6 +91,9 @@ public:
     // used by DeviceList, Alarmstatus, RecordList in "GB/T 28181—2016"
     std::vector<std::map<std::string, std::string> > item_list;
 
+    // register authencation
+    bool register_authentication;
+
 public:
     std::string serial;
     std::string realm;
@@ -114,6 +117,7 @@ public:
     SrsSipRequest();
     virtual ~SrsSipRequest();
 public:
+    virtual bool is_register_authentication();
     virtual bool is_register();
     virtual bool is_invite();
     virtual bool is_message();

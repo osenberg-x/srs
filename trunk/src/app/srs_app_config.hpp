@@ -519,6 +519,8 @@ public:
     virtual bool get_stream_caster_gb28181_sip_invite_port_fixed(SrsConfDirective* conf);
     virtual bool get_stream_caster_gb28181_auto_create_channel(SrsConfDirective* conf);
     virtual srs_utime_t get_stream_caster_gb28181_sip_query_catalog_interval(SrsConfDirective* conf);
+    virtual bool get_stream_caster_gb28181_sip_register_authentication(SrsConfDirective* conf);
+    virtual std::string get_stream_caster_gb28181_sip_register_password(SrsConfDirective* conf);
 
 // rtc section
 public:

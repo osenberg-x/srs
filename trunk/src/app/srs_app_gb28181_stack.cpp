@@ -255,6 +255,10 @@ SrsSipRequest::~SrsSipRequest()
     srs_freep(transport);
 }
 
+bool SrsSipRequest::is_register_authentication() {
+    return register_authentication;
+}
+
 bool SrsSipRequest::is_register()
 {
     return method == SRS_SIP_METHOD_REGISTER;
@@ -649,6 +653,7 @@ srs_error_t SrsSipStack::do_parse_request(SrsSipRequest* req, const char* recv_m
                         } 
                         else if (!strcasecmp(phead, "authorization:")){
                             req->authorization = content;
+                            std::cout << "authorization content: " << content << std::endl;
                         } 
                         else {
                             //TODO: fixme
@@ -660,6 +665,12 @@ srs_error_t SrsSipStack::do_parse_request(SrsSipRequest* req, const char* recv_m
         }else{
             p++;
         }
+    }
+
+    if (req->is_register() && req->authorization.empty()) {
+        req->register_authentication = true;
+    } else if (req->is_register() && !req->authorization.empty()) {
+        req->register_authentication = false;
     }
    
     std::vector<std::string>  method_uri_ver = srs_string_split(firstline, " ");
@@ -882,7 +893,7 @@ void SrsSipStack::resp_status(stringstream& ss, SrsSipRequest *req)
         */
         if (req->authorization.empty()){
             //TODO: fixme supoort 401
-            //return req_401_unauthorized(ss, req);
+            return req_401_unauthorized(ss, req);
         }
 
         ss << SRS_SIP_VERSION <<" 200 OK" << SRS_RTSP_CRLF

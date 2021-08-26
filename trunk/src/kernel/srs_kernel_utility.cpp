@@ -145,7 +145,7 @@ srs_utime_t srs_update_system_time()
     }
     
     _srs_system_time_us_cache = now_us;
-    srs_info("clock updated, startup=%" PRId64 "us, now=%" PRId64 "us", _srs_system_time_startup_time, _srs_system_time_us_cache);
+    // srs_info("clock updated, startup=%" PRId64 "us, now=%" PRId64 "us", _srs_system_time_startup_time, _srs_system_time_us_cache);
     
     return _srs_system_time_us_cache;
 }
